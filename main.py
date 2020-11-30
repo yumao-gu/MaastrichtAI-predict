@@ -7,7 +7,7 @@ import numpy as np
 import pandas  as pd
 import seaborn as sns
 import time
-
+from sklearn.metrics import classification_report
 from datetime import date
 from matplotlib import pyplot as plt
 from pylab import rcParams
@@ -16,11 +16,10 @@ from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 from xgboost import XGBRegressor
 
-test_size = 0.15  # proportion of dataset to be used as test set
-N = 3  # for feature at day t, we use lags from t-1, t-2, ..., t-N as features
+test_size = 0.15                # proportion of dataset to be used as test set
+N = 3                          # for feature at day t, we use lags from t-1, t-2, ..., t-N as features
 
 model_seed = 100
-
 
 def get_mape(y_true, y_pred):
     """
@@ -29,8 +28,8 @@ def get_mape(y_true, y_pred):
     y_true, y_pred = np.array(y_true), np.array(y_pred)
     return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
 
-
 def _load_data():
+
     stk_path = "/content/drive/MyDrive/Colab Notebooks/VTI.csv"
     df = pd.read_csv(stk_path, sep=",")
     # Convert Date column to datetime
@@ -44,21 +43,21 @@ def _load_data():
 
     return df
 
-
 def feature_engineer(df):
+
     df['range_hl'] = df['high'] - df['low']
     df['range_oc'] = df['open'] - df['close']
 
-    lag_cols = ['adj_close', 'range_hl', 'range_oc', 'volume', 'future_price']
+    lag_cols = ['adj_close', 'range_hl', 'range_oc', 'volume','future_price']
     shift_range = [x + 1 for x in range(N)]
 
     for col in lag_cols:
         for i in shift_range:
-            new_col = '{}_lag_{}'.format(col, i)  # 格式化字符串
-            df[new_col] = df[col].shift(i)
+
+            new_col='{}_lag_{}'.format(col, i)   # 格式化字符串
+            df[new_col]=df[col].shift(i)
 
     return df[N:]
-
 
 def scale_row(row, feat_mean, feat_std):
     """
@@ -76,7 +75,6 @@ def scale_row(row, feat_mean, feat_std):
     row_scaled = (row - feat_mean) / feat_std
 
     return row_scaled
-
 
 def get_mov_avg_std(df, col, N):
     """
@@ -102,8 +100,8 @@ def get_mov_avg_std(df, col, N):
 
     return df_out
 
-
 def get_future_price(df, col='adj_close', n=30):
+
     mean_list = df[col].rolling(window=n, min_periods=n).mean()  # len(mean_list) = len(df)
     # Append mean_list to df
     df_out = df.copy()
@@ -111,41 +109,40 @@ def get_future_price(df, col='adj_close', n=30):
     df_out['future_price'] = df_out['future_price'].shift(-n)
 
     for i in range(len(df_out)):
-        if df_out.loc[i, 'future_price'] > 0:
-            if df_out.loc[i, col] - df_out.loc[i, 'future_price'] < -0.6:
-                df_out.loc[i, 'class'] = 1
-            elif df_out.loc[i, col] - df_out.loc[i, 'future_price'] > 0.6:
-                df_out.loc[i, 'class'] = 2
-            else:
-                df_out.loc[i, 'class'] = 0
+      if df_out.loc[i,'future_price'] > 0:
+        if df_out.loc[i,col] - df_out.loc[i,'future_price'] < -0.6:
+          df_out.loc[i,'class'] = 1
+        elif df_out.loc[i,col] - df_out.loc[i,'future_price'] > 0.6:
+          df_out.loc[i,'class'] = 2
         else:
-            df_out.loc[i, 'class'] = -1
+          df_out.loc[i,'class'] = 0
+      else:
+        df_out.loc[i,'class'] = -1
 
     return df_out[:-n]
 
-
 def get_predict_class(df):
-    df_out = df.copy()
-    for i in range(len(df_out)):
-        # print(f'{df_out.iloc[i,:]}')
-        if df_out.loc[df_out.index[i], 'pre_y1'] - df_out.loc[df_out.index[i], 'pre_y2'] < -0.6:
-            df_out.loc[df_out.index[i], 'pre_class'] = 1
-        elif df_out.loc[df_out.index[i], 'pre_y1'] - df_out.loc[df_out.index[i], 'pre_y2'] > 0.6:
-            df_out.loc[df_out.index[i], 'pre_class'] = 2
-        else:
-            df_out.loc[df_out.index[i], 'pre_class'] = 0
 
-    return df_out
+  df_out = df.copy()
+  for i in range(len(df_out)):
+    # print(f'{df_out.iloc[i,:]}')
+    if df_out.loc[df_out.index[i],'pre_y1'] - df_out.loc[df_out.index[i],'pre_y2'] < -0.6:
+      df_out.loc[df_out.index[i],'pre_class'] = 1
+    elif df_out.loc[df_out.index[i],'pre_y1'] - df_out.loc[df_out.index[i],'pre_y2'] > 0.6:
+      df_out.loc[df_out.index[i],'pre_class'] = 2
+    else:
+      df_out.loc[df_out.index[i],'pre_class'] = 0
 
+  return df_out
 
 if __name__ == '__main__':
 
     # 第一步：获取数据
-    data_df = _load_data()
+    data_df=_load_data()
 
     # 第二步：特征工程
-    data_df = get_future_price(data_df)
-    df = feature_engineer(data_df)
+    data_df=get_future_price(data_df)
+    df=feature_engineer(data_df)
 
     # 第三步：数据标准化，先统一计算出标准化的数据，在对其进行数据切分。
     cols_list = [
@@ -158,6 +155,7 @@ if __name__ == '__main__':
     for col in cols_list:
         df = get_mov_avg_std(df, col, N)
     # print(f'{df.iloc[0,:]}')
+
 
     # 第四步：生成训练数据和测试数据。因训练数据和测试数据的标准化方式不同，因此需切分训练和测试数据。
     num_test = int(test_size * len(df))
@@ -177,7 +175,7 @@ if __name__ == '__main__':
         cols_to_scale.append("volume_lag_" + str(i))
         cols_to_scale.append("future_price_lag_" + str(i))
 
-    scaler = StandardScaler()  # 启示三：标准化也不应带测试集，以避免信息泄漏
+    scaler = StandardScaler() # 启示三：标准化也不应带测试集，以避免信息泄漏
     train_scaled = scaler.fit_transform(train[cols_to_scale])
     # Convert the numpy array back into pandas dataframe
     train_scaled = pd.DataFrame(train_scaled, columns=cols_to_scale)
@@ -215,52 +213,53 @@ if __name__ == '__main__':
 
     # 第七步：开始训练
     from sklearn.model_selection import GridSearchCV
+    parameters1={'n_estimators':[100],
+                'max_depth':[10],
+                'learning_rate': [0.3],
+                'min_child_weight':[8],
+                }
+    #parameters={'max_depth':range(2,10,1)}
+    model1=XGBRegressor(seed=model_seed,
+                         n_estimators=100,
+                         max_depth=3,
+                         eval_metric='rmse',
+                         learning_rate=0.1,
+                         min_child_weight=1,
+                         subsample=1,
+                         colsample_bytree=1,
+                         colsample_bylevel=1,
+                         gamma=0)
+    gs1=GridSearchCV(estimator= model1,param_grid=parameters1,cv=5,refit= True,scoring='neg_mean_squared_error')
+    gs1.fit(X_train_scaled,y_train_scaled1)
 
-    parameters = {'n_estimators': range(50, 300, 50),
-                  'max_depth': range(6, 11, 1),
-                  'learning_rate': [0.2, 0.3, 0.4],
-                  'min_child_weight': range(7, 12, 1),
-                  # 'subsample':[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1],
-                  # 'gamma':[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1],
-                  # 'colsample_bytree':[0.5, 0.6, 0.7, 0.8, 0.9, 1],
-                  # 'colsample_bylevel':[0.5, 0.6, 0.7, 0.8, 0.9, 1]
-                  }
-    # parameters={'max_depth':range(2,10,1)}
-    model1 = XGBRegressor(seed=model_seed,
-                          n_estimators=100,
-                          max_depth=3,
-                          eval_metric='rmse',
-                          learning_rate=0.1,
-                          min_child_weight=1,
-                          subsample=1,
-                          colsample_bytree=1,
-                          colsample_bylevel=1,
-                          gamma=0)
-    gs1 = GridSearchCV(estimator=model1, param_grid=parameters, cv=5, refit=True, scoring='neg_mean_squared_error')
-    gs1.fit(X_train_scaled, y_train_scaled1)
+    parameters2={'n_estimators':[250],
+                'max_depth':[8],
+                'learning_rate': [0.3],
+                'min_child_weight':[7],
+                }
+    
+    model2=XGBRegressor(seed=model_seed,
+                         n_estimators=100,
+                         max_depth=3,
+                         eval_metric='rmse',
+                         learning_rate=0.1,
+                         min_child_weight=1,
+                         subsample=1,
+                         colsample_bytree=1,
+                         colsample_bylevel=1,
+                         gamma=0)
+    gs2=GridSearchCV(estimator= model2,param_grid=parameters2,cv=5,refit= True,scoring='neg_mean_squared_error')
+    gs2.fit(X_train_scaled,y_train_scaled2)
 
-    model2 = XGBRegressor(seed=model_seed,
-                          n_estimators=100,
-                          max_depth=3,
-                          eval_metric='rmse',
-                          learning_rate=0.1,
-                          min_child_weight=1,
-                          subsample=1,
-                          colsample_bytree=1,
-                          colsample_bylevel=1,
-                          gamma=0)
-    gs2 = GridSearchCV(estimator=model2, param_grid=parameters, cv=5, refit=True, scoring='neg_mean_squared_error')
-    gs2.fit(X_train_scaled, y_train_scaled2)
-
-    print('最优参数: ' + str(gs1.best_params_))
-    print('最优参数: ' + str(gs2.best_params_))
+    print ('最优参数: ' + str(gs1.best_params_))
+    print ('最优参数: ' + str(gs2.best_params_))
 
     # est_scaled = gs.predict(X_train_scaled)
     # train['est'] = est_scaled * math.sqrt(scaler.var_[0]) + scaler.mean_[0]
 
     pre_y_scaled1 = gs1.predict(X_sample_scaled)
     test['pre_y_scaled1'] = pre_y_scaled1
-    test['pre_y1'] = test['pre_y_scaled1'] * test['adj_close_std'] + test['adj_close_mean']
+    test['pre_y1']=test['pre_y_scaled1'] * test['adj_close_std'] + test['adj_close_mean']
 
     plt.figure()
     ax = test.plot(x='date', y='adj_close', style='b-', grid=True)
@@ -269,7 +268,7 @@ if __name__ == '__main__':
 
     pre_y_scaled2 = gs2.predict(X_sample_scaled)
     test['pre_y_scaled2'] = pre_y_scaled2
-    test['pre_y2'] = test['pre_y_scaled2'] * test['future_price_std'] + test['future_price_mean']
+    test['pre_y2']=test['pre_y_scaled2'] * test['future_price_std'] + test['future_price_mean']
 
     plt.figure()
     ax = test.plot(x='date', y='future_price', style='b-', grid=True)
@@ -282,12 +281,6 @@ if __name__ == '__main__':
     ax = test_new.plot(x='date', y='pre_class', style='r-', grid=True, ax=ax)
     plt.show()
 
-    # rmse=math.sqrt(mean_squared_error(y_sample, test['pre_y']))
-    # print("RMSE on dev set = %0.3f" % rmse)
-    # mape = get_mape(y_sample, test['pre_y'])
-    # print("MAPE on dev set = %0.3f%%" % mape)
-
-    # imp = list(zip(train[features], gs.best_estimator_.feature_importances_))
-    # imp.sort(key=lambda tup: tup[1])
-    # for i in range(-1,-10,-1):
-    #     print(imp[i])
+    
+    target_names = ['Class-0', 'Class-1', 'Class-2']
+    print(classification_report(test_new['class'], test_new['pre_class'], target_names=target_names))
