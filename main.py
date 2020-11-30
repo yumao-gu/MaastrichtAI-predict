@@ -16,9 +16,9 @@ from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 from xgboost import XGBRegressor
 
-test_size = 0.15                # proportion of dataset to be used as test set
+test_size = 0.1                # proportion of dataset to be used as test set
 N = 3                          # for feature at day t, we use lags from t-1, t-2, ..., t-N as features
-H = 21
+H = 30
 model_seed = 100
 
 def get_mape(y_true, y_pred):
